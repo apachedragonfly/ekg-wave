@@ -1,13 +1,15 @@
 import { useMemo } from 'react';
 import { useSimulator } from '../context/SimulatorContext';
+import { generateRhythmWaveform } from '../services/waveformGenerator';
+import type { WaveformData } from '../services/waveformGenerator';
 
 // Interface for the return value of useEKGSimulator
 interface EKGSimulatorResult {
-  beatInterval: number;    // Time in ms between beats
-  waveformPattern: string; // The pattern to use for rendering
+  beatInterval: number;     // Time in ms between beats
+  waveformPattern: string;  // The pattern to use for rendering
+  waveformData: WaveformData; // Generated waveform data
   amplitude: number;       // The amplitude of the waveform
   frequency: number;       // The frequency modifier for the waveform
-  // Additional parameters for more realistic waveforms
   pWaveHeight: number;     // Height of P wave
   qrsWidth: number;        // Width of QRS complex
   tWaveHeight: number;     // Height of T wave
@@ -27,10 +29,13 @@ export function useEKGSimulator(): EKGSimulatorResult {
     return 60000 / heartRate;
   }, [heartRate]);
   
-  // Determine the waveform pattern and parameters based on rhythm
+  // Determine waveform parameters based on rhythm
   const waveformParams = useMemo(() => {
+    let noiseLevel = 0;
+    
     switch (rhythm) {
       case 'AFib':
+        noiseLevel = 0.3; // More noise for AFib
         return {
           waveformPattern: 'afib',
           amplitude: 40 + Math.random() * 20,  // More irregular
@@ -61,8 +66,27 @@ export function useEKGSimulator(): EKGSimulatorResult {
     }
   }, [rhythm]);
   
+  // Generate waveform data using the waveform generator
+  const waveformData = useMemo(() => {
+    // Convert rhythm to a type that the generator accepts
+    const rhythmType = rhythm === 'AFib' ? 'AFib' : 
+                       rhythm === 'VTach' ? 'VTach' : 'NSR';
+    
+    // Calculate noise level based on rhythm
+    const noise = rhythm === 'AFib' ? 0.3 : 
+                  rhythm === 'VTach' ? 0.1 : 0.05;
+    
+    return generateRhythmWaveform(rhythmType, {
+      bpm: heartRate,
+      noise,
+      amplitude: 1.0,
+      points: 500 // Generate 500 points for smooth rendering
+    });
+  }, [rhythm, heartRate]);
+  
   return {
     beatInterval,
+    waveformData,
     ...waveformParams
   };
 } 
