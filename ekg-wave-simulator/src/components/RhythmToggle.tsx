@@ -1,35 +1,37 @@
 import React from 'react';
-import { RHYTHM_TYPES } from '../context/SimulatorContext';
+import type { Rhythm } from '../types';
 
 interface RhythmToggleProps {
-  value: string;
-  onChange: (value: string) => void;
+  value: Rhythm;
+  onChange: (rhythm: Rhythm) => void;
 }
 
-const RhythmToggle: React.FC<RhythmToggleProps> = ({ value, onChange }) => {
-  // Display names for rhythm types
-  const rhythmLabels = {
-    [RHYTHM_TYPES.NSR]: 'NSR (Normal Sinus Rhythm)',
-    [RHYTHM_TYPES.AFIB]: 'AFib (Atrial Fibrillation)',
-    [RHYTHM_TYPES.VTACH]: 'VTach (Ventricular Tachycardia)'
-  };
+const RHYTHM_OPTIONS = [
+  { value: 'normal' as Rhythm, label: 'NSR' },
+  { value: 'afib' as Rhythm, label: 'AFib' },
+  { value: 'vtach' as Rhythm, label: 'VTach' },
+];
 
+const RhythmToggle: React.FC<RhythmToggleProps> = ({ value, onChange }) => {
   return (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        Rhythm
-      </label>
-      <select
-        value={value}
-        onChange={(e) => onChange(e.target.value)}
-        className="block w-full p-2 border border-gray-300 rounded-md shadow-sm focus:border-blue-500 focus:ring-blue-500"
-      >
-        {Object.entries(rhythmLabels).map(([rhythmKey, label]) => (
-          <option key={rhythmKey} value={rhythmKey}>
-            {label}
-          </option>
+    <div className="mb-3">
+      <label className="block text-sm font-medium text-gray-700 mb-1">Rhythm</label>
+      <div className="flex flex-wrap gap-1">
+        {RHYTHM_OPTIONS.map((option) => (
+          <button
+            key={option.value}
+            type="button"
+            className={`px-2 py-1 text-xs rounded-md transition-colors ${
+              value === option.value
+                ? 'bg-blue-600 text-white'
+                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+            }`}
+            onClick={() => onChange(option.value)}
+          >
+            {option.label}
+          </button>
         ))}
-      </select>
+      </div>
     </div>
   );
 };

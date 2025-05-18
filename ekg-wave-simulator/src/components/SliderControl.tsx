@@ -22,10 +22,11 @@ const SliderControl: React.FC<SliderControlProps> = ({
   unit = ''
 }) => {
   return (
-    <div className="mb-4">
-      <label className="block text-sm font-medium text-gray-700 mb-1">
-        {label} {displayValue && `${value}${unit}`}
-      </label>
+    <div className="mb-3">
+      <div className="flex justify-between text-sm font-medium text-gray-700 mb-1">
+        <label>{label}</label>
+        {displayValue && <span>{value}{unit}</span>}
+      </div>
       <div className="flex items-center space-x-2">
         <span className="text-xs">{min}</span>
         <input
@@ -35,7 +36,7 @@ const SliderControl: React.FC<SliderControlProps> = ({
           step={step}
           value={value}
           onChange={(e) => onChange(Number(e.target.value))}
-          className="flex-grow h-2 bg-gray-200 rounded-lg appearance-none cursor-pointer"
+          className="flex-grow h-1.5 bg-gray-200 rounded-lg appearance-none cursor-pointer"
         />
         <span className="text-xs">{max}</span>
       </div>

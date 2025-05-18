@@ -1,92 +1,81 @@
-import { useMemo } from 'react';
-import { useSimulator } from '../context/SimulatorContext';
-import { generateRhythmWaveform } from '../services/waveformGenerator';
-import type { WaveformData } from '../services/waveformGenerator';
+import { useState, useEffect, useCallback } from 'react';
+import { generateWaveform } from '../utils/waveformGenerator';
+import type { Rhythm, Lead, WaveformPoint } from '../types';
 
-// Interface for the return value of useEKGSimulator
-interface EKGSimulatorResult {
-  beatInterval: number;     // Time in ms between beats
-  waveformPattern: string;  // The pattern to use for rendering
-  waveformData: WaveformData; // Generated waveform data
-  amplitude: number;       // The amplitude of the waveform
-  frequency: number;       // The frequency modifier for the waveform
-  pWaveHeight: number;     // Height of P wave
-  qrsWidth: number;        // Width of QRS complex
-  tWaveHeight: number;     // Height of T wave
+interface UseEKGSimulatorProps {
+  initialHeartRate?: number;
+  initialRhythm?: Rhythm;
+  initialPrInterval?: number;
+  initialShowLabels?: boolean;
+  initialShowNoise?: boolean;
+  initialLead?: Lead;
 }
 
-/**
- * Custom hook that provides the logic for syncing the waveform to simulator state
- * 
- * @returns {EKGSimulatorResult} Object containing beat interval and waveform pattern
- */
-export function useEKGSimulator(): EKGSimulatorResult {
-  // Get simulator state from context
-  const { heartRate, rhythm, prInterval } = useSimulator();
+interface UseEKGSimulatorReturn {
+  heartRate: number;
+  rhythm: Rhythm;
+  prInterval: number;
+  showLabels: boolean;
+  showNoise: boolean;
+  selectedLead: Lead;
+  waveformData: WaveformPoint[];
+  setHeartRate: (rate: number) => void;
+  setRhythm: (rhythm: Rhythm) => void;
+  setPrInterval: (interval: number) => void;
+  setShowLabels: (show: boolean) => void;
+  setShowNoise: (show: boolean) => void;
+  setSelectedLead: (lead: Lead) => void;
+}
+
+export function useEKGSimulator({
+  initialHeartRate = 70,
+  initialRhythm = 'normal',
+  initialPrInterval = 0.16,
+  initialShowLabels = false,
+  initialShowNoise = false,
+  initialLead = 'II'
+}: UseEKGSimulatorProps = {}): UseEKGSimulatorReturn {
+  // State for EKG parameters
+  const [heartRate, setHeartRate] = useState<number>(initialHeartRate);
+  const [rhythm, setRhythm] = useState<Rhythm>(initialRhythm);
+  const [prInterval, setPrInterval] = useState<number>(initialPrInterval);
+  const [showLabels, setShowLabels] = useState<boolean>(initialShowLabels);
+  const [showNoise, setShowNoise] = useState<boolean>(initialShowNoise);
+  const [selectedLead, setSelectedLead] = useState<Lead>(initialLead);
   
-  // Calculate beat interval (60000ms / BPM)
-  const beatInterval = useMemo(() => {
-    return 60000 / heartRate;
-  }, [heartRate]);
+  // State for generated waveform data
+  const [waveformData, setWaveformData] = useState<WaveformPoint[]>([]);
   
-  // Determine waveform parameters based on rhythm
-  const waveformParams = useMemo(() => {
-    let noiseLevel = 0;
-    
-    switch (rhythm) {
-      case 'AFib':
-        noiseLevel = 0.3; // More noise for AFib
-        return {
-          waveformPattern: 'afib',
-          amplitude: 40 + Math.random() * 20,  // More irregular
-          frequency: 0.06 + Math.random() * 0.02,
-          pWaveHeight: 0,                     // No P waves in AFib
-          qrsWidth: 0.08,                     // Normal QRS width
-          tWaveHeight: 15 + Math.random() * 5 // Variable T waves
-        };
-      case 'VTach':
-        return {
-          waveformPattern: 'vtach',
-          amplitude: 70,  // Higher amplitude
-          frequency: 0.08, // Higher frequency
-          pWaveHeight: 0,  // No P waves in VTach
-          qrsWidth: 0.14,  // Wide QRS complex
-          tWaveHeight: 20  // Tall T waves
-        };
-      case 'NSR':
-      default:
-        return {
-          waveformPattern: 'nsr',
-          amplitude: 50, // Normal amplitude
-          frequency: 0.05, // Normal frequency
-          pWaveHeight: 10, // Normal P wave
-          qrsWidth: 0.08,  // Normal QRS width (80ms)
-          tWaveHeight: 15  // Normal T wave height
-        };
-    }
-  }, [rhythm]);
+  // Generate waveform when parameters change
+  const generateEKGWaveform = useCallback(() => {
+    const data = generateWaveform(
+      rhythm,
+      heartRate,
+      selectedLead,
+      prInterval,
+      showNoise
+    );
+    setWaveformData(data);
+  }, [rhythm, heartRate, selectedLead, prInterval, showNoise]);
   
-  // Generate waveform data using the waveform generator
-  const waveformData = useMemo(() => {
-    // Convert rhythm to a type that the generator accepts
-    const rhythmType = rhythm === 'AFib' ? 'AFib' : 
-                       rhythm === 'VTach' ? 'VTach' : 'NSR';
-    
-    // Calculate noise level based on rhythm
-    const noise = rhythm === 'AFib' ? 0.3 : 
-                  rhythm === 'VTach' ? 0.1 : 0.05;
-    
-    return generateRhythmWaveform(rhythmType, {
-      bpm: heartRate,
-      noise,
-      amplitude: 1.0,
-      points: 500 // Generate 500 points for smooth rendering
-    });
-  }, [rhythm, heartRate]);
+  // Update waveform when parameters change
+  useEffect(() => {
+    generateEKGWaveform();
+  }, [generateEKGWaveform]);
   
   return {
-    beatInterval,
+    heartRate,
+    rhythm,
+    prInterval,
+    showLabels,
+    showNoise,
+    selectedLead,
     waveformData,
-    ...waveformParams
+    setHeartRate,
+    setRhythm,
+    setPrInterval,
+    setShowLabels,
+    setShowNoise,
+    setSelectedLead
   };
 } 
