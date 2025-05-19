@@ -230,22 +230,30 @@ const WaveformCanvas: React.FC = () => {
     // Calculate x-position scaling from time to pixels
     const timeToX = (time: number) => time * scaleX;
     
+    // Common component durations
+    const pDuration = 0.08; // 80ms P wave
+    const tDuration = 0.16; // 160ms T wave
+    
     if (rhythm === 'normal') {
       // Normal Sinus Rhythm: label P, QRS, and T waves
-      const pWaveStart = 0.04; // P wave starts at 0.04s
-      const pWaveDuration = 0.08; // P wave typically lasts 0.08s
-      const pWaveMid = pWaveStart + pWaveDuration / 2;
       
+      // P wave timing calculations
+      const pStart = 0.04; // P wave starts at 0.04s
+      const pMid = pStart + pDuration / 2;
+      
+      // QRS timing calculations 
       const qrsStart = prInterval; // QRS starts at PR interval
       const qrsMid = qrsStart + qrsWidth / 2;
       
-      const tStart = qrsStart + qrsWidth + (qtInterval - qrsWidth - 0.16);
-      const tDuration = 0.16; // T wave typically lasts 0.16s
+      // T wave timing calculations
+      // Calculate ST segment duration based on QT interval
+      const stSegmentDuration = Math.max(0.05, qtInterval - qrsWidth - tDuration);
+      const tStart = qrsStart + qrsWidth + stSegmentDuration;
       const tMid = tStart + tDuration / 2;
       
       // P wave label
       ctx.fillStyle = WAVE_LABELS.P.color;
-      const pX = timeToX(pWaveMid);
+      const pX = timeToX(pMid);
       const pY = offsetY - 0.2 * scaleY - fontSize;
       ctx.fillText('P', pX, pY);
       
@@ -261,13 +269,49 @@ const WaveformCanvas: React.FC = () => {
       const tY = offsetY - 0.3 * scaleY - fontSize;
       ctx.fillText('T', tX, tY);
       
+      // Draw PR interval marker
+      ctx.strokeStyle = 'rgba(0, 136, 204, 0.3)'; // Light blue
+      ctx.lineWidth = 0.8;
+      ctx.beginPath();
+      ctx.moveTo(timeToX(pStart), offsetY + 20);
+      ctx.lineTo(timeToX(qrsStart), offsetY + 20);
+      ctx.stroke();
+      
+      // Label PR interval
+      ctx.fillStyle = 'rgba(0, 136, 204, 0.7)';
+      ctx.font = `${Math.max(8, fontSize - 2)}px Arial`;
+      ctx.fillText(`PR: ${prInterval}s`, timeToX(pStart + (qrsStart - pStart)/2), offsetY + 20 + fontSize);
+      
+      // Draw QT interval marker if space allows
+      if (qtInterval > 0.2) {
+        ctx.strokeStyle = 'rgba(46, 204, 113, 0.3)'; // Light green
+        ctx.lineWidth = 0.8;
+        ctx.beginPath();
+        ctx.moveTo(timeToX(qrsStart), offsetY + 35);
+        ctx.lineTo(timeToX(tStart + tDuration), offsetY + 35);
+        ctx.stroke();
+        
+        // Label QT interval
+        ctx.fillStyle = 'rgba(46, 204, 113, 0.7)';
+        ctx.fillText(`QT: ${qtInterval}s`, 
+                    timeToX(qrsStart + (tStart + tDuration - qrsStart)/2), 
+                    offsetY + 35 + fontSize);
+      }
+      
     } else if (rhythm === 'afib') {
       // Atrial Fibrillation: label fibrillatory waves and QRS
-      const fibrillationMid = 0.1; // Middle of fibrillatory activity
-      const qrsStart = 0.2; // Arbitrary starting position
+      
+      // Fibrillatory waves timing
+      const fibrillationStart = 0.05;
+      const fibrillationMid = 0.1; 
+      
+      // QRS timing calculations (arbitrary starting position in AFib)
+      const qrsStart = 0.2; 
       const qrsMid = qrsStart + qrsWidth / 2;
-      const tStart = qrsStart + qrsWidth + (qtInterval - qrsWidth - 0.16);
-      const tDuration = 0.16;
+      
+      // T wave timing calculations
+      const stSegmentDuration = Math.max(0.05, qtInterval - qrsWidth - tDuration);
+      const tStart = qrsStart + qrsWidth + stSegmentDuration;
       const tMid = tStart + tDuration / 2;
       
       // Fibrillatory waves label
@@ -275,6 +319,11 @@ const WaveformCanvas: React.FC = () => {
       const fX = timeToX(fibrillationMid);
       const fY = offsetY - 0.05 * scaleY - fontSize;
       ctx.fillText('f', fX, fY);
+      
+      // Add an "irregular" note
+      ctx.fillStyle = 'rgba(0, 136, 204, 0.7)';
+      ctx.font = `${Math.max(8, fontSize - 2)}px Arial`;
+      ctx.fillText('Irregular', timeToX(fibrillationStart + 0.15), offsetY - 0.05 * scaleY - fontSize * 2);
       
       // QRS label
       ctx.fillStyle = WAVE_LABELS.QRS.color;
@@ -290,9 +339,16 @@ const WaveformCanvas: React.FC = () => {
       
     } else if (rhythm === 'vtach') {
       // Ventricular Tachycardia: wide QRS complexes only
+      
+      // VTach has fast rate and wide QRS
       const qrsStart = 0.1;
       const wideQrsWidth = Math.max(0.12, qrsWidth);
       const qrsMid = qrsStart + wideQrsWidth / 2;
+      
+      // T wave often merged with QRS in VTach
+      const stSegmentDuration = Math.max(0.02, qtInterval - wideQrsWidth - tDuration);
+      const tStart = qrsStart + wideQrsWidth + stSegmentDuration;
+      const tMid = tStart + tDuration / 2;
       
       // Wide QRS label
       ctx.fillStyle = WAVE_LABELS.QRS.color;
@@ -300,9 +356,12 @@ const WaveformCanvas: React.FC = () => {
       const qrsY = offsetY - 1.8 * scaleY - fontSize;
       ctx.fillText('QRS', qrsX, qrsY);
       
+      // Add a "wide" note
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
+      ctx.font = `${Math.max(8, fontSize - 2)}px Arial`;
+      ctx.fillText(`Wide: ${wideQrsWidth.toFixed(2)}s`, timeToX(qrsMid), offsetY - 1.8 * scaleY - fontSize * 2);
+      
       // Show inverted T wave if visible
-      const tStart = qrsStart + wideQrsWidth + 0.02;
-      const tMid = tStart + 0.08;
       ctx.fillStyle = WAVE_LABELS.T.color;
       const tX = timeToX(tMid);
       const tY = offsetY + 0.3 * scaleY + fontSize;
