@@ -39,7 +39,10 @@ export function generateWaveform(
   const cycleLength = cycleDuration / 1000; // Length of one cardiac cycle in seconds
   const sampleRate = 250; // 250 samples per second
   const pointsPerCycle = Math.round(cycleLength * sampleRate);
-  const totalPoints = 5 * pointsPerCycle; // Generate 5 cardiac cycles
+  
+  // Generate multiple cardiac cycles (at least 5 seconds of data)
+  const secondsToGenerate = Math.max(5, 3 * cycleLength);
+  const totalPoints = Math.round(secondsToGenerate * sampleRate);
   
   // Initialize the waveform array
   const waveform: WaveformPoint[] = [];
@@ -82,12 +85,17 @@ export function generateWaveform(
       yValue += generateVTachPoint(cyclePosition, rhythmProfile, qrsWidth, qtInterval);
     }
     
-    // Apply amplitude gain
-    yValue *= amplitudeGain;
+    // Apply amplitude gain with normalization to ensure consistent amplitude across leads
+    // Use a standardized scaling to maintain a more consistent appearance
+    const normalizedGain = amplitudeGain * (lead === 'II' || lead === 'V5' ? 1.0 : 
+                            (lead === 'V1' || lead === 'V2' ? 1.2 : 0.9));
+    yValue *= normalizedGain;
     
     // Add random noise if enabled
     if (addNoise) {
-      yValue += (Math.random() * 2 - 1) * noiseAmplitude;
+      // Scale noise based on heart rate and lead
+      const dynamicNoiseScale = 0.05 * (1 + (heartRate - 70) / 100);
+      yValue += (Math.random() * 2 - 1) * noiseAmplitude * dynamicNoiseScale;
     }
     
     // Add point to waveform array

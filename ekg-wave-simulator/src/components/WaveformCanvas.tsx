@@ -160,20 +160,33 @@ const WaveformCanvas: React.FC = () => {
     
     const range = maxY - minY;
     
-    // Scale factor to fit the waveform in the canvas
-    const scaleX = width / (data[data.length - 1].x - data[0].x);
-    const scaleY = (height * 0.8) / range;
+    // Calculate time range of the data
+    const timeRange = data[data.length - 1].x - data[0].x;
     
-    // Center the waveform vertically
-    const offsetY = height / 2;
+    // Only display the first 2 cardiac cycles for better visibility on wide canvas
+    const visibleTimeRange = Math.min(timeRange, 2 * (60 / heartRate));
+    const visibleEndTime = data[0].x + visibleTimeRange;
+    
+    // Filter data to visible range
+    const visibleData = data.filter(point => point.x <= visibleEndTime);
+    
+    // Scale factor to fit the waveform in the canvas
+    const scaleX = width / visibleTimeRange;
+    
+    // Use a more conservative scale factor to prevent extreme amplitude variations
+    // and provide more vertical space for labels
+    const scaleY = (height * 0.6) / (range || 1); // Prevent division by zero
+    
+    // Center the waveform vertically with more space at the top for labels
+    const offsetY = height * 0.6;
     
     // Draw the waveform
     ctx.beginPath();
     ctx.strokeStyle = '#333';
-    ctx.lineWidth = 1.2;
+    ctx.lineWidth = 1.5; // Slightly thicker line for better visibility
     
-    for (let i = 0; i < data.length; i++) {
-      const point = data[i];
+    for (let i = 0; i < visibleData.length; i++) {
+      const point = visibleData[i];
       const x = (point.x - data[0].x) * scaleX;
       const y = offsetY - point.y * scaleY;
       
@@ -184,6 +197,14 @@ const WaveformCanvas: React.FC = () => {
       }
     }
     
+    ctx.stroke();
+    
+    // Draw a horizontal baseline (isoelectric line) for reference
+    ctx.beginPath();
+    ctx.strokeStyle = 'rgba(0, 0, 0, 0.1)';
+    ctx.lineWidth = 0.5;
+    ctx.moveTo(0, offsetY);
+    ctx.lineTo(width, offsetY);
     ctx.stroke();
   };
 
@@ -212,18 +233,25 @@ const WaveformCanvas: React.FC = () => {
     
     const range = maxY - minY;
     
-    // Scale factor to fit the waveform in the canvas
-    const scaleX = width / (data[data.length - 1].x - data[0].x);
-    const scaleY = (height * 0.8) / range;
+    // Calculate time range of the data
+    const timeRange = data[data.length - 1].x - data[0].x;
     
-    // Center the waveform vertically
-    const offsetY = height / 2;
-
+    // Only display the first 2 cardiac cycles for better visibility on wide canvas
+    const visibleTimeRange = Math.min(timeRange, 2 * (60 / heartRate));
+    const visibleEndTime = data[0].x + visibleTimeRange;
+    
+    // Scale factor to fit the waveform in the canvas
+    const scaleX = width / visibleTimeRange;
+    const scaleY = (height * 0.6) / (range || 1);
+    
+    // Center the waveform vertically with more space for labels
+    const offsetY = height * 0.6;
+    
     // Calculate timing for one cardiac cycle in seconds
     const cycleLength = 60 / heartRate;
     
-    // Set font size based on canvas height
-    const fontSize = Math.max(10, Math.floor(height / 15));
+    // Set font size based on canvas height, but ensure it's visible
+    const fontSize = Math.max(12, Math.floor(height / 12));
     ctx.font = `${fontSize}px Arial`;
     ctx.textAlign = 'center';
     
@@ -233,6 +261,10 @@ const WaveformCanvas: React.FC = () => {
     // Common component durations
     const pDuration = 0.08; // 80ms P wave
     const tDuration = 0.16; // 160ms T wave
+    
+    // Common label vertical positions
+    const topLabelY = offsetY - maxY * scaleY - fontSize - 5; // Position above peak
+    const bottomLabelY = offsetY - minY * scaleY + fontSize + 5; // Position below nadir
     
     if (rhythm === 'normal') {
       // Normal Sinus Rhythm: label P, QRS, and T waves
@@ -251,17 +283,28 @@ const WaveformCanvas: React.FC = () => {
       const tStart = qrsStart + qrsWidth + stSegmentDuration;
       const tMid = tStart + tDuration / 2;
       
+      // Draw individual QRS component labels (Q, R, S)
+      const qPosition = qrsStart + 0.01;
+      const rPosition = qrsStart + qrsWidth * 0.3;
+      const sPosition = qrsStart + qrsWidth * 0.5;
+      
+      // Q wave label
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.7)'; // Red with transparency
+      ctx.fillText('Q', timeToX(qPosition), offsetY + 0.2 * scaleY + fontSize);
+      
+      // R wave label
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.9)'; // Brighter red
+      ctx.fillText('R', timeToX(rPosition), topLabelY);
+      
+      // S wave label
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
+      ctx.fillText('S', timeToX(sPosition), offsetY + 0.3 * scaleY + fontSize);
+      
       // P wave label
       ctx.fillStyle = WAVE_LABELS.P.color;
       const pX = timeToX(pMid);
       const pY = offsetY - 0.2 * scaleY - fontSize;
       ctx.fillText('P', pX, pY);
-      
-      // QRS label
-      ctx.fillStyle = WAVE_LABELS.QRS.color;
-      const qrsX = timeToX(qrsMid);
-      const qrsY = offsetY - 1.0 * scaleY - fontSize;
-      ctx.fillText('QRS', qrsX, qrsY);
       
       // T wave label
       ctx.fillStyle = WAVE_LABELS.T.color;
@@ -279,7 +322,7 @@ const WaveformCanvas: React.FC = () => {
       
       // Label PR interval
       ctx.fillStyle = 'rgba(0, 136, 204, 0.7)';
-      ctx.font = `${Math.max(8, fontSize - 2)}px Arial`;
+      ctx.font = `${Math.max(10, fontSize - 2)}px Arial`;
       ctx.fillText(`PR: ${prInterval}s`, timeToX(pStart + (qrsStart - pStart)/2), offsetY + 20 + fontSize);
       
       // Draw QT interval marker if space allows
@@ -314,6 +357,19 @@ const WaveformCanvas: React.FC = () => {
       const tStart = qrsStart + qrsWidth + stSegmentDuration;
       const tMid = tStart + tDuration / 2;
       
+      // Draw individual QRS component labels (Q, R, S)
+      const qPosition = qrsStart + 0.01;
+      const rPosition = qrsStart + qrsWidth * 0.3;
+      const sPosition = qrsStart + qrsWidth * 0.5;
+      
+      // QRS component labels
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
+      ctx.fillText('Q', timeToX(qPosition), offsetY + 0.2 * scaleY + fontSize);
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.9)';
+      ctx.fillText('R', timeToX(rPosition), topLabelY);
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
+      ctx.fillText('S', timeToX(sPosition), offsetY + 0.3 * scaleY + fontSize);
+      
       // Fibrillatory waves label
       ctx.fillStyle = WAVE_LABELS.P.color;
       const fX = timeToX(fibrillationMid);
@@ -322,14 +378,8 @@ const WaveformCanvas: React.FC = () => {
       
       // Add an "irregular" note
       ctx.fillStyle = 'rgba(0, 136, 204, 0.7)';
-      ctx.font = `${Math.max(8, fontSize - 2)}px Arial`;
+      ctx.font = `${Math.max(10, fontSize - 2)}px Arial`;
       ctx.fillText('Irregular', timeToX(fibrillationStart + 0.15), offsetY - 0.05 * scaleY - fontSize * 2);
-      
-      // QRS label
-      ctx.fillStyle = WAVE_LABELS.QRS.color;
-      const qrsX = timeToX(qrsMid);
-      const qrsY = offsetY - 1.0 * scaleY - fontSize;
-      ctx.fillText('QRS', qrsX, qrsY);
       
       // T wave label
       ctx.fillStyle = WAVE_LABELS.T.color;
@@ -350,23 +400,36 @@ const WaveformCanvas: React.FC = () => {
       const tStart = qrsStart + wideQrsWidth + stSegmentDuration;
       const tMid = tStart + tDuration / 2;
       
+      // Draw individual QRS component labels
+      const rPosition = qrsStart + wideQrsWidth * 0.3;
+      
+      // R wave label
+      ctx.fillStyle = 'rgba(231, 76, 60, 0.9)';
+      ctx.fillText('R', timeToX(rPosition), topLabelY);
+      
       // Wide QRS label
       ctx.fillStyle = WAVE_LABELS.QRS.color;
       const qrsX = timeToX(qrsMid);
-      const qrsY = offsetY - 1.8 * scaleY - fontSize;
-      ctx.fillText('QRS', qrsX, qrsY);
+      const qrsY = topLabelY - fontSize - 5;
+      ctx.fillText('Wide QRS', qrsX, qrsY);
       
-      // Add a "wide" note
+      // Add a "wide" note with measurement
       ctx.fillStyle = 'rgba(231, 76, 60, 0.7)';
-      ctx.font = `${Math.max(8, fontSize - 2)}px Arial`;
-      ctx.fillText(`Wide: ${wideQrsWidth.toFixed(2)}s`, timeToX(qrsMid), offsetY - 1.8 * scaleY - fontSize * 2);
+      ctx.font = `${Math.max(10, fontSize - 2)}px Arial`;
+      ctx.fillText(`${(wideQrsWidth * 1000).toFixed(0)}ms`, timeToX(qrsMid), qrsY - fontSize - 2);
       
       // Show inverted T wave if visible
       ctx.fillStyle = WAVE_LABELS.T.color;
       const tX = timeToX(tMid);
-      const tY = offsetY + 0.3 * scaleY + fontSize;
-      ctx.fillText('T', tX, tY);
+      const tY = bottomLabelY + 5;
+      ctx.fillText('T (inverted)', tX, tY);
     }
+    
+    // Add heart rate information
+    ctx.fillStyle = 'rgba(0, 0, 0, 0.6)';
+    ctx.font = `${Math.max(10, fontSize - 2)}px Arial`;
+    ctx.textAlign = 'left';
+    ctx.fillText(`Rate: ${heartRate} BPM`, 10, fontSize + 5);
   };
 
   // Add size controls so you can adjust the size directly
