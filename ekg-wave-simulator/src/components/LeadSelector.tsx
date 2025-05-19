@@ -23,15 +23,15 @@ const LEAD_OPTIONS: { value: Lead; label: string }[] = [
 
 const LeadSelector: React.FC<LeadSelectorProps> = ({ value, onChange }) => {
   return (
-    <div className="mb-2">
-      <label htmlFor="lead-select" className="block text-sm font-medium text-gray-700 mb-1">
+    <div className="mb-1">
+      <label htmlFor="lead-select" className="block text-xs font-medium text-gray-700 mb-0.5">
         Lead
       </label>
       <select
         id="lead-select"
         value={value}
         onChange={(e) => onChange(e.target.value as Lead)}
-        className="block w-full rounded-md border border-gray-300 py-1 px-2 text-sm bg-white"
+        className="block w-full rounded-md border border-gray-300 py-0.5 px-2 text-xs bg-white"
       >
         {LEAD_OPTIONS.map((option) => (
           <option key={option.value} value={option.value}>

@@ -10,13 +10,19 @@ const SimulatorPage: React.FC = () => {
   const { 
     heartRate, 
     rhythm, 
-    prInterval, 
+    prInterval,
+    qrsWidth,
+    qtInterval,
+    amplitudeGain,
     showLabels,
     showNoise,
     selectedLead,
     setHeartRate, 
     setRhythm, 
     setPrInterval,
+    setQrsWidth,
+    setQtInterval,
+    setAmplitudeGain,
     setShowLabels,
     setShowNoise,
     setSelectedLead,
@@ -24,7 +30,7 @@ const SimulatorPage: React.FC = () => {
   } = useSimulator();
 
   return (
-    <div className="container mx-auto p-1 max-w-3xl">
+    <div className="container mx-auto p-2 max-w-screen-2xl">
       <div className="flex justify-between items-center mb-2">
         <h1 className="text-lg font-bold">EKG Simulator</h1>
         <button
@@ -35,14 +41,14 @@ const SimulatorPage: React.FC = () => {
         </button>
       </div>
       
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-2">
-        <div className="md:col-span-2">
+      <div className="grid grid-cols-1 lg:grid-cols-12 gap-2">
+        <div className="lg:col-span-11 overflow-x-auto">
           <WaveformCanvas />
         </div>
         
-        <div>
+        <div className="lg:col-span-1">
           <div className="p-2 bg-white shadow-md rounded-lg mb-2">
-            <h2 className="text-xs font-semibold mb-1">Parameters</h2>
+            <h2 className="text-xs font-semibold mb-1">Cardiac Timing</h2>
             
             <SliderControl
               label="Heart Rate:"
@@ -65,7 +71,37 @@ const SimulatorPage: React.FC = () => {
               max={0.20}
               step={0.01}
               onChange={setPrInterval}
-              unit=" s"
+              unit=" sec"
+            />
+
+            <SliderControl
+              label="QRS Width:"
+              value={qrsWidth}
+              min={0.06}
+              max={0.12}
+              step={0.01}
+              onChange={setQrsWidth}
+              unit=" sec"
+            />
+
+            <SliderControl
+              label="QT Interval:"
+              value={qtInterval}
+              min={0.30}
+              max={0.50}
+              step={0.01}
+              onChange={setQtInterval}
+              unit=" sec"
+            />
+
+            <SliderControl
+              label="Amplitude:"
+              value={amplitudeGain}
+              min={0.5}
+              max={2.0}
+              step={0.1}
+              onChange={setAmplitudeGain}
+              unit="×"
             />
           </div>
           

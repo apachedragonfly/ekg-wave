@@ -8,11 +8,11 @@ interface ToggleSwitchProps {
 
 const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ label, checked, onChange }) => {
   return (
-    <div className="flex items-center justify-between py-1 mb-2">
-      <span className="text-sm font-medium text-gray-700">{label}</span>
+    <div className="flex items-center justify-between py-0.5 mb-1.5">
+      <span className="text-xs font-medium text-gray-700">{label}</span>
       <button
         type="button"
-        className={`relative inline-flex h-5 w-9 items-center rounded-full ${
+        className={`relative inline-flex h-4 w-7 items-center rounded-full ${
           checked ? 'bg-blue-600' : 'bg-gray-300'
         } transition-colors duration-200 focus:outline-none`}
         role="switch"
@@ -21,7 +21,7 @@ const ToggleSwitch: React.FC<ToggleSwitchProps> = ({ label, checked, onChange })
       >
         <span
           className={`${
-            checked ? 'translate-x-5' : 'translate-x-1'
+            checked ? 'translate-x-3.5' : 'translate-x-0.5'
           } inline-block h-3 w-3 transform rounded-full bg-white transition-transform duration-200`}
         />
       </button>

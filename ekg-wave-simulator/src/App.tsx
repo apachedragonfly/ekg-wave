@@ -6,11 +6,11 @@ export default function App() {
   const { heartRate, rhythm, selectedLead } = useSimulator();
 
   return (
-    <div className="app min-h-screen bg-gray-100">
-      <header className="bg-blue-600 text-white p-2 shadow-md">
-        <div className="container mx-auto flex justify-between items-center">
+    <div className="app min-h-screen bg-gray-50">
+      <header className="bg-blue-600 text-white p-1 shadow-md">
+        <div className="container mx-auto max-w-screen-2xl flex justify-between items-center">
           <div>
-            <h1 className="text-lg font-bold">EKG Simulator</h1>
+            <h1 className="text-base font-bold">EKG Simulator</h1>
             <p className="text-xs opacity-80">
               {rhythm === 'normal' ? 'NSR' : 
                rhythm === 'afib' ? 'AFib' : 'VTach'} 
@@ -22,20 +22,19 @@ export default function App() {
               href="https://github.com/yourusername/ekg-wave-simulator" 
               target="_blank" 
               rel="noopener noreferrer"
-              className="text-sm text-white hover:text-blue-200 transition-colors"
+              className="text-xs text-white hover:text-blue-200 transition-colors"
             >
               GitHub
             </a>
           </div>
         </div>
       </header>
-      <main className="py-2">
+      <main className="py-1">
         <SimulatorPage />
       </main>
-      <footer className="bg-gray-800 text-white p-2 mt-4">
-        <div className="container mx-auto text-center text-xs">
-          <p>EKG Simulator - For Educational Purposes Only</p>
-          <p className="text-gray-400">Not for clinical use</p>
+      <footer className="bg-gray-800 text-white p-1 mt-2">
+        <div className="container mx-auto max-w-screen-2xl text-center text-xs">
+          <p>EKG Simulator - Educational Use Only • Not for clinical use</p>
         </div>
       </footer>
     </div>

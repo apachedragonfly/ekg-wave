@@ -7,29 +7,41 @@ interface SimulatorContextType {
   heartRate: number;
   rhythm: Rhythm;
   prInterval: number;
+  qrsWidth: number;
+  qtInterval: number;
+  amplitudeGain: number;
   showLabels: boolean;
   showNoise: boolean;
   selectedLead: Lead;
   setHeartRate: (rate: number) => void;
   setRhythm: (rhythm: Rhythm) => void;
   setPrInterval: (interval: number) => void;
+  setQrsWidth: (width: number) => void;
+  setQtInterval: (interval: number) => void;
+  setAmplitudeGain: (gain: number) => void;
   setShowLabels: (show: boolean) => void;
   setShowNoise: (show: boolean) => void;
   setSelectedLead: (lead: Lead) => void;
   resetSettings: () => void;
 }
 
-// Create context with a default undefined value
+// Create context with default values
 const defaultContextValue: SimulatorContextType = {
   heartRate: 70,
   rhythm: 'normal',
   prInterval: 0.16,
+  qrsWidth: 0.08,
+  qtInterval: 0.36,
+  amplitudeGain: 1.0,
   showLabels: false,
   showNoise: false,
   selectedLead: 'II',
   setHeartRate: () => {},
   setRhythm: () => {},
   setPrInterval: () => {},
+  setQrsWidth: () => {},
+  setQtInterval: () => {},
+  setAmplitudeGain: () => {},
   setShowLabels: () => {},
   setShowNoise: () => {},
   setSelectedLead: () => {},
@@ -49,6 +61,9 @@ export const SimulatorProvider: React.FC<SimulatorProviderProps> = ({ children }
   const [heartRate, setHeartRate] = useState<number>(defaultContextValue.heartRate);
   const [rhythm, setRhythm] = useState<Rhythm>(defaultContextValue.rhythm);
   const [prInterval, setPrInterval] = useState<number>(defaultContextValue.prInterval);
+  const [qrsWidth, setQrsWidth] = useState<number>(defaultContextValue.qrsWidth);
+  const [qtInterval, setQtInterval] = useState<number>(defaultContextValue.qtInterval);
+  const [amplitudeGain, setAmplitudeGain] = useState<number>(defaultContextValue.amplitudeGain);
   
   // UI toggle states
   const [showLabels, setShowLabels] = useState<boolean>(defaultContextValue.showLabels);
@@ -60,6 +75,9 @@ export const SimulatorProvider: React.FC<SimulatorProviderProps> = ({ children }
     setHeartRate(defaultContextValue.heartRate);
     setRhythm(defaultContextValue.rhythm);
     setPrInterval(defaultContextValue.prInterval);
+    setQrsWidth(defaultContextValue.qrsWidth);
+    setQtInterval(defaultContextValue.qtInterval);
+    setAmplitudeGain(defaultContextValue.amplitudeGain);
     setShowLabels(defaultContextValue.showLabels);
     setShowNoise(defaultContextValue.showNoise);
     setSelectedLead(defaultContextValue.selectedLead);
@@ -70,12 +88,18 @@ export const SimulatorProvider: React.FC<SimulatorProviderProps> = ({ children }
     heartRate,
     rhythm,
     prInterval,
+    qrsWidth,
+    qtInterval,
+    amplitudeGain,
     showLabels,
     showNoise,
     selectedLead,
     setHeartRate,
     setRhythm,
     setPrInterval,
+    setQrsWidth,
+    setQtInterval,
+    setAmplitudeGain,
     setShowLabels,
     setShowNoise,
     setSelectedLead,

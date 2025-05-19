@@ -1,4 +1,4 @@
-import React, { useRef, useEffect } from 'react';
+import React, { useRef, useEffect, useState } from 'react';
 import { useSimulator } from '../context/SimulatorContext';
 import { generateWaveform } from '../utils/waveformGenerator';
 import type { WaveformPoint } from '../types';
@@ -12,10 +12,17 @@ const WAVE_LABELS = {
 
 const WaveformCanvas: React.FC = () => {
   const canvasRef = useRef<HTMLCanvasElement>(null);
+  // Update default size to 1650x100
+  const [canvasWidth, setCanvasWidth] = useState(1650);
+  const [canvasHeight, setCanvasHeight] = useState(100);
+  
   const { 
     heartRate, 
     rhythm, 
-    prInterval, 
+    prInterval,
+    qrsWidth,
+    qtInterval,
+    amplitudeGain,
     showLabels,
     showNoise,
     selectedLead
@@ -54,17 +61,20 @@ const WaveformCanvas: React.FC = () => {
     // Clear canvas
     ctx.clearRect(0, 0, canvas.width, canvas.height);
 
-    // Generate waveform data
+    // Generate waveform data with all physiological parameters
     const waveformData: WaveformPoint[] = generateWaveform(
       rhythm,
       heartRate, 
       selectedLead,
       prInterval,
-      showNoise
+      showNoise,
+      qrsWidth,
+      qtInterval,
+      amplitudeGain
     );
 
     // Set canvas styles
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.2;
     ctx.strokeStyle = '#333';
     
     // Draw background grid
@@ -75,9 +85,9 @@ const WaveformCanvas: React.FC = () => {
 
     // Draw labels if enabled
     if (showLabels) {
-      drawWaveLabels(ctx, rhythm, waveformData, canvas.width, canvas.height);
+      drawWaveLabels(ctx, rhythm, waveformData, canvas.width, canvas.height, prInterval, qrsWidth, qtInterval);
     }
-  }, [heartRate, rhythm, prInterval, showLabels, showNoise, selectedLead]);
+  }, [heartRate, rhythm, prInterval, qrsWidth, qtInterval, amplitudeGain, showLabels, showNoise, selectedLead, canvasWidth, canvasHeight]);
 
   // Draw a grid on the canvas
   const drawGrid = (
@@ -98,8 +108,12 @@ const WaveformCanvas: React.FC = () => {
       ctx.stroke();
     }
     
-    // Draw vertical grid lines
-    const xStep = width / 20;
+    // Draw vertical grid lines - optimized for wider canvas
+    // Each major grid cell represents 200ms
+    const msPerPixel = 0.2 / (width / 50); // 200ms per major division
+    const pixelsPerMS = 1 / msPerPixel;
+    const xStep = pixelsPerMS * 40; // 40ms per small grid (5mm)
+    
     for (let x = 0; x <= width; x += xStep) {
       ctx.beginPath();
       ctx.moveTo(x, 0);
@@ -109,7 +123,7 @@ const WaveformCanvas: React.FC = () => {
     
     // Draw darker grid lines every 5 small squares
     ctx.strokeStyle = '#cccccc';
-    ctx.lineWidth = 0.3;
+    ctx.lineWidth = 0.4;
     
     for (let y = 0; y <= height; y += yStep * 5) {
       ctx.beginPath();
@@ -156,7 +170,7 @@ const WaveformCanvas: React.FC = () => {
     // Draw the waveform
     ctx.beginPath();
     ctx.strokeStyle = '#333';
-    ctx.lineWidth = 1;
+    ctx.lineWidth = 1.2;
     
     for (let i = 0; i < data.length; i++) {
       const point = data[i];
@@ -179,7 +193,10 @@ const WaveformCanvas: React.FC = () => {
     rhythm: string,
     data: WaveformPoint[],
     width: number,
-    height: number
+    height: number,
+    prInterval: number = 0.16,
+    qrsWidth: number = 0.08,
+    qtInterval: number = 0.36
   ) => {
     // Skip if there's no data
     if (data.length === 0) return;
@@ -202,75 +219,106 @@ const WaveformCanvas: React.FC = () => {
     // Center the waveform vertically
     const offsetY = height / 2;
 
-    // Calculate positions for labels based on rhythm
-    const firstCycleStart = 0.2; // Start a bit into the data to avoid edge effects
+    // Calculate timing for one cardiac cycle in seconds
+    const cycleLength = 60 / heartRate;
     
-    ctx.font = '8px Arial';
+    // Set font size based on canvas height
+    const fontSize = Math.max(10, Math.floor(height / 15));
+    ctx.font = `${fontSize}px Arial`;
     ctx.textAlign = 'center';
+    
+    // Calculate x-position scaling from time to pixels
+    const timeToX = (time: number) => time * scaleX;
     
     if (rhythm === 'normal') {
       // Normal Sinus Rhythm: label P, QRS, and T waves
-      const pWavePos = firstCycleStart;
-      const qrsPos = firstCycleStart + 0.16; // PR interval
-      const tWavePos = qrsPos + 0.1; // After QRS
+      const pWaveStart = 0.04; // P wave starts at 0.04s
+      const pWaveDuration = 0.08; // P wave typically lasts 0.08s
+      const pWaveMid = pWaveStart + pWaveDuration / 2;
+      
+      const qrsStart = prInterval; // QRS starts at PR interval
+      const qrsMid = qrsStart + qrsWidth / 2;
+      
+      const tStart = qrsStart + qrsWidth + (qtInterval - qrsWidth - 0.16);
+      const tDuration = 0.16; // T wave typically lasts 0.16s
+      const tMid = tStart + tDuration / 2;
       
       // P wave label
       ctx.fillStyle = WAVE_LABELS.P.color;
-      const pX = pWavePos * scaleX;
-      const pY = offsetY - 0.2 * scaleY - 10;
+      const pX = timeToX(pWaveMid);
+      const pY = offsetY - 0.2 * scaleY - fontSize;
       ctx.fillText('P', pX, pY);
       
       // QRS label
       ctx.fillStyle = WAVE_LABELS.QRS.color;
-      const qrsX = qrsPos * scaleX;
-      const qrsY = offsetY - 1.0 * scaleY - 10;
+      const qrsX = timeToX(qrsMid);
+      const qrsY = offsetY - 1.0 * scaleY - fontSize;
       ctx.fillText('QRS', qrsX, qrsY);
       
       // T wave label
       ctx.fillStyle = WAVE_LABELS.T.color;
-      const tX = tWavePos * scaleX;
-      const tY = offsetY - 0.3 * scaleY - 10;
+      const tX = timeToX(tMid);
+      const tY = offsetY - 0.3 * scaleY - fontSize;
       ctx.fillText('T', tX, tY);
       
     } else if (rhythm === 'afib') {
       // Atrial Fibrillation: label fibrillatory waves and QRS
-      const fibrillationPos = firstCycleStart + 0.1;
-      const qrsPos = firstCycleStart + 0.3;
-      const tWavePos = qrsPos + 0.1;
+      const fibrillationMid = 0.1; // Middle of fibrillatory activity
+      const qrsStart = 0.2; // Arbitrary starting position
+      const qrsMid = qrsStart + qrsWidth / 2;
+      const tStart = qrsStart + qrsWidth + (qtInterval - qrsWidth - 0.16);
+      const tDuration = 0.16;
+      const tMid = tStart + tDuration / 2;
       
       // Fibrillatory waves label
       ctx.fillStyle = WAVE_LABELS.P.color;
-      const fX = fibrillationPos * scaleX;
-      const fY = offsetY - 0.05 * scaleY - 10;
+      const fX = timeToX(fibrillationMid);
+      const fY = offsetY - 0.05 * scaleY - fontSize;
       ctx.fillText('f', fX, fY);
       
       // QRS label
       ctx.fillStyle = WAVE_LABELS.QRS.color;
-      const qrsX = qrsPos * scaleX;
-      const qrsY = offsetY - 1.0 * scaleY - 10;
+      const qrsX = timeToX(qrsMid);
+      const qrsY = offsetY - 1.0 * scaleY - fontSize;
       ctx.fillText('QRS', qrsX, qrsY);
       
       // T wave label
       ctx.fillStyle = WAVE_LABELS.T.color;
-      const tX = tWavePos * scaleX;
-      const tY = offsetY - 0.3 * scaleY - 10;
+      const tX = timeToX(tMid);
+      const tY = offsetY - 0.3 * scaleY - fontSize;
       ctx.fillText('T', tX, tY);
       
     } else if (rhythm === 'vtach') {
       // Ventricular Tachycardia: wide QRS complexes only
-      const qrsPos = firstCycleStart + 0.1;
+      const qrsStart = 0.1;
+      const wideQrsWidth = Math.max(0.12, qrsWidth);
+      const qrsMid = qrsStart + wideQrsWidth / 2;
       
       // Wide QRS label
       ctx.fillStyle = WAVE_LABELS.QRS.color;
-      const qrsX = qrsPos * scaleX;
-      const qrsY = offsetY - 1.8 * scaleY - 10;
+      const qrsX = timeToX(qrsMid);
+      const qrsY = offsetY - 1.8 * scaleY - fontSize;
       ctx.fillText('QRS', qrsX, qrsY);
+      
+      // Show inverted T wave if visible
+      const tStart = qrsStart + wideQrsWidth + 0.02;
+      const tMid = tStart + 0.08;
+      ctx.fillStyle = WAVE_LABELS.T.color;
+      const tX = timeToX(tMid);
+      const tY = offsetY + 0.3 * scaleY + fontSize;
+      ctx.fillText('T', tX, tY);
     }
   };
 
+  // Add size controls so you can adjust the size directly
+  const handleIncreaseWidth = () => setCanvasWidth(prev => prev + 150);
+  const handleDecreaseWidth = () => setCanvasWidth(prev => Math.max(600, prev - 150));
+  const handleIncreaseHeight = () => setCanvasHeight(prev => prev + 25);
+  const handleDecreaseHeight = () => setCanvasHeight(prev => Math.max(50, prev - 25));
+
   return (
     <div className="p-2 bg-white shadow-md rounded-lg">
-      <div className="flex justify-between items-center mb-1 text-xs">
+      <div className="flex justify-between items-center mb-1 text-sm">
         <h2 className="font-semibold">
           {selectedLead} • {rhythm === 'normal' ? 'NSR' : 
             rhythm === 'afib' ? 'AFib' : 'VTach'} 
@@ -278,7 +326,7 @@ const WaveformCanvas: React.FC = () => {
         </h2>
         <button
           onClick={exportAsPNG}
-          className="px-1 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
+          className="px-2 py-0.5 text-xs bg-blue-600 text-white rounded hover:bg-blue-700 transition-colors"
         >
           Export
         </button>
@@ -286,10 +334,55 @@ const WaveformCanvas: React.FC = () => {
       <div className="bg-gray-50 border border-gray-200 rounded-md">
         <canvas 
           ref={canvasRef} 
-          width={400} 
-          height={180}
+          width={canvasWidth} 
+          height={canvasHeight}
           className="w-full h-auto"
         />
+      </div>
+      {/* Size controls */}
+      <div className="mt-2 flex flex-wrap justify-between">
+        <div className="text-xs font-medium flex items-center">
+          <span>Size: {canvasWidth}×{canvasHeight}</span>
+          <span className="ml-2 text-gray-500">• Standard EKG paper: 1625×100 (25mm/s, 10mm/mV)</span>
+        </div>
+        <div className="flex space-x-2">
+          <div className="text-xs">
+            Width:
+            <button 
+              onClick={handleDecreaseWidth}
+              className="ml-1 px-1.5 bg-gray-200 rounded"
+            >
+              -
+            </button>
+            <button 
+              onClick={handleIncreaseWidth}
+              className="ml-1 px-1.5 bg-gray-200 rounded"
+            >
+              +
+            </button>
+          </div>
+          <div className="text-xs">
+            Height:
+            <button 
+              onClick={handleDecreaseHeight}
+              className="ml-1 px-1.5 bg-gray-200 rounded"
+            >
+              -
+            </button>
+            <button 
+              onClick={handleIncreaseHeight}
+              className="ml-1 px-1.5 bg-gray-200 rounded"
+            >
+              +
+            </button>
+          </div>
+          <button
+            onClick={() => { setCanvasWidth(1650); setCanvasHeight(100); }}
+            className="ml-1 px-2 text-xs bg-gray-200 rounded hover:bg-gray-300"
+          >
+            Reset Size
+          </button>
+        </div>
       </div>
     </div>
   );

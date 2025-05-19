@@ -6,7 +6,10 @@ import { getNormalRhythmProfile, getAFibRhythmProfile, getVTachRhythmProfile } f
  * @param rhythm The cardiac rhythm to simulate
  * @param heartRate Heart rate in beats per minute
  * @param lead The EKG lead to display
- * @param prInterval PR interval in seconds (applies to NSR)
+ * @param prInterval PR interval in seconds (time from P wave start to QRS)
+ * @param qrsWidth QRS complex width in seconds (ventricular depolarization)
+ * @param qtInterval QT interval in seconds (ventricular depolarization + repolarization)
+ * @param amplitudeGain Amplitude multiplier for all deflections
  * @param addNoise Whether to add baseline noise/artifact
  * @returns Array of points representing the waveform
  */
@@ -15,7 +18,10 @@ export function generateWaveform(
   heartRate: number, 
   lead: Lead, 
   prInterval: number,
-  addNoise: boolean = false
+  addNoise: boolean = false,
+  qrsWidth: number = 0.08,
+  qtInterval: number = 0.36,
+  amplitudeGain: number = 1.0
 ): WaveformPoint[] {
   // Calculate basic timing parameters
   const cycleLength = 60 / heartRate; // Length of one cardiac cycle in seconds
@@ -55,14 +61,17 @@ export function generateWaveform(
     // Calculate basic point values
     let yValue = baselineMv;
     
-    // Add rhythm-specific features
+    // Add rhythm-specific features with additional physiological parameters
     if (rhythm === 'normal') {
-      yValue += generateNormalSinusPoint(cyclePosition, rhythmProfile);
+      yValue += generateNormalSinusPoint(cyclePosition, rhythmProfile, prInterval, qrsWidth, qtInterval);
     } else if (rhythm === 'afib') {
-      yValue += generateAFibPoint(cyclePosition, cycle, rhythmProfile);
+      yValue += generateAFibPoint(cyclePosition, cycle, rhythmProfile, qrsWidth, qtInterval);
     } else if (rhythm === 'vtach') {
-      yValue += generateVTachPoint(cyclePosition, rhythmProfile);
+      yValue += generateVTachPoint(cyclePosition, rhythmProfile, qrsWidth, qtInterval);
     }
+    
+    // Apply amplitude gain
+    yValue *= amplitudeGain;
     
     // Add random noise if enabled
     if (addNoise) {
@@ -80,9 +89,15 @@ export function generateWaveform(
 }
 
 /**
- * Generates a point value for Normal Sinus Rhythm
+ * Generates a point value for Normal Sinus Rhythm with customizable intervals
  */
-function generateNormalSinusPoint(position: number, profile: any): number {
+function generateNormalSinusPoint(
+  position: number, 
+  profile: any, 
+  prInterval: number = 0.16, 
+  qrsWidth: number = 0.08, 
+  qtInterval: number = 0.36
+): number {
   const {
     pWave,
     qrsComplex,
@@ -91,16 +106,24 @@ function generateNormalSinusPoint(position: number, profile: any): number {
   
   let value = 0;
   
-  // P wave (occurs at the beginning of the cycle)
-  if (position < pWave.duration) {
-    const pPosition = position / pWave.duration;
+  // Calculate timing parameters
+  const pDuration = 0.08; // P wave duration
+  const pStart = 0.04; // Start P wave slightly after beginning of cycle
+  const qrsStart = prInterval; // QRS starts after PR interval
+  const qrsEnd = qrsStart + qrsWidth;
+  const stSegmentDuration = Math.max(0.05, qtInterval - qrsWidth - 0.16); // ST segment duration
+  const tStart = qrsEnd + stSegmentDuration; // T wave starts after ST segment
+  const tDuration = 0.16; // T wave duration
+  
+  // P wave
+  if (position >= pStart && position < pStart + pDuration) {
+    const pPosition = (position - pStart) / pDuration;
     value += pWave.amplitude * Math.sin(Math.PI * pPosition);
   }
   
-  // QRS complex (occurs after PR interval)
-  const prPosition = 0.16; // Standard PR interval position
-  if (position >= prPosition && position < prPosition + qrsComplex.duration) {
-    const qrsPosition = (position - prPosition) / qrsComplex.duration;
+  // QRS complex
+  if (position >= qrsStart && position < qrsEnd) {
+    const qrsPosition = (position - qrsStart) / qrsWidth;
     
     // Simplified QRS morphology
     if (qrsPosition < 0.2) {
@@ -119,10 +142,15 @@ function generateNormalSinusPoint(position: number, profile: any): number {
     }
   }
   
-  // T wave (occurs after QRS)
-  const tPosition = prPosition + qrsComplex.duration + 0.08; // Start T wave after QRS + small delay
-  if (position >= tPosition && position < tPosition + tWave.duration) {
-    const tWavePosition = (position - tPosition) / tWave.duration;
+  // ST segment - flat with possible slight elevation/depression
+  if (position >= qrsEnd && position < tStart) {
+    // Small ST elevation or depression based on lead
+    value += (profile.stElevation || 0) * 0.05;
+  }
+  
+  // T wave
+  if (position >= tStart && position < tStart + tDuration) {
+    const tWavePosition = (position - tStart) / tDuration;
     value += tWave.amplitude * Math.sin(Math.PI * tWavePosition);
   }
   
@@ -130,9 +158,15 @@ function generateNormalSinusPoint(position: number, profile: any): number {
 }
 
 /**
- * Generates a point value for Atrial Fibrillation
+ * Generates a point value for Atrial Fibrillation with customizable QRS and QT
  */
-function generateAFibPoint(position: number, cycle: number, profile: any): number {
+function generateAFibPoint(
+  position: number, 
+  cycle: number, 
+  profile: any,
+  qrsWidth: number = 0.08,
+  qtInterval: number = 0.36
+): number {
   const {
     qrsComplex,
     tWave
@@ -142,17 +176,29 @@ function generateAFibPoint(position: number, cycle: number, profile: any): numbe
   
   // In AFib, P waves are replaced with irregular fibrillatory waves
   // Applying small, rapid, irregular oscillations to the baseline
-  value += (Math.sin(position * 120) + Math.sin(position * 125)) * 0.05;
+  value += (
+    Math.sin(position * 120) + 
+    Math.sin(position * 137) + 
+    Math.sin(position * 146)
+  ) * 0.05;
   
   // Create irregular RR intervals
   const rrVariationFactor = 0.2; // 20% variation in RR intervals
-  const baseRR = 1.0 / (1 + (Math.random() - 0.5) * rrVariationFactor);
+  // Generate a consistent variation based on cycle for reproducible results
+  const cycleVariation = Math.sin(cycle * 0.31) * Math.cos(cycle * 0.77) * Math.sin(cycle * 1.23);
+  const baseRR = 1.0 / (1 + cycleVariation * rrVariationFactor);
   const adjustedPosition = (position * baseRR) % 1;
   
-  // QRS complex
+  // Calculate timing parameters
   const qrsStart = 0.2; // Arbitrary position within the cycle
-  if (adjustedPosition >= qrsStart && adjustedPosition < qrsStart + qrsComplex.duration) {
-    const qrsPosition = (adjustedPosition - qrsStart) / qrsComplex.duration;
+  const qrsEnd = qrsStart + qrsWidth;
+  const stSegmentDuration = Math.max(0.05, qtInterval - qrsWidth - 0.16);
+  const tStart = qrsEnd + stSegmentDuration;
+  const tDuration = 0.16;
+  
+  // QRS complex
+  if (adjustedPosition >= qrsStart && adjustedPosition < qrsEnd) {
+    const qrsPosition = (adjustedPosition - qrsStart) / qrsWidth;
     
     // QRS morphology
     if (qrsPosition < 0.2) {
@@ -167,10 +213,15 @@ function generateAFibPoint(position: number, cycle: number, profile: any): numbe
     }
   }
   
+  // ST segment
+  if (adjustedPosition >= qrsEnd && adjustedPosition < tStart) {
+    // Small ST elevation or depression based on lead
+    value += (profile.stElevation || 0) * 0.05;
+  }
+  
   // T wave
-  const tPosition = qrsStart + qrsComplex.duration + 0.08;
-  if (adjustedPosition >= tPosition && adjustedPosition < tPosition + tWave.duration) {
-    const tWavePosition = (adjustedPosition - tPosition) / tWave.duration;
+  if (adjustedPosition >= tStart && adjustedPosition < tStart + tDuration) {
+    const tWavePosition = (adjustedPosition - tStart) / tDuration;
     value += tWave.amplitude * Math.sin(Math.PI * tWavePosition);
   }
   
@@ -178,9 +229,14 @@ function generateAFibPoint(position: number, cycle: number, profile: any): numbe
 }
 
 /**
- * Generates a point value for Ventricular Tachycardia
+ * Generates a point value for Ventricular Tachycardia with customizable QRS and QT
  */
-function generateVTachPoint(position: number, profile: any): number {
+function generateVTachPoint(
+  position: number, 
+  profile: any,
+  qrsWidth: number = 0.12, // VTach has wide QRS by definition
+  qtInterval: number = 0.42 // VTach has longer QT interval
+): number {
   const {
     qrsComplex,
     tWave
@@ -190,24 +246,44 @@ function generateVTachPoint(position: number, profile: any): number {
   
   // No P wave in VTach
   
-  // Wide, bizarre QRS complexes
+  // Ensure VTach always has wide QRS (pathological)
+  const wideQrsWidth = Math.max(0.12, qrsWidth); // minimum 120ms for VTach
+  
+  // Calculate timing parameters
   const qrsStart = 0.1; // Arbitrary position within the cycle
-  if (position >= qrsStart && position < qrsStart + qrsComplex.duration) {
-    const qrsPosition = (position - qrsStart) / qrsComplex.duration;
+  const qrsEnd = qrsStart + wideQrsWidth;
+  const stSegmentDuration = Math.max(0.02, qtInterval - wideQrsWidth - 0.16);
+  const tStart = qrsEnd + stSegmentDuration;
+  const tDuration = 0.16;
+  
+  // Wide, bizarre QRS complexes
+  if (position >= qrsStart && position < qrsEnd) {
+    const qrsPosition = (position - qrsStart) / wideQrsWidth;
     
-    // Create a wide, bizarre QRS
-    if (qrsPosition < 0.5) {
-      value += qrsComplex.amplitude * Math.sin(Math.PI * qrsPosition);
+    // Create a wide, bizarre QRS - more asymmetric than normal
+    if (qrsPosition < 0.4) {
+      // First part - rapid upstroke
+      value += qrsComplex.amplitude * 1.2 * Math.pow(qrsPosition / 0.4, 1.5);
+    } else if (qrsPosition < 0.7) {
+      // Middle - bizarre plateau or notching
+      const notch = Math.sin(qrsPosition * 20) * 0.1;
+      value += qrsComplex.amplitude * (1.0 - (qrsPosition - 0.4) / 0.3) + notch;
     } else {
-      value -= qrsComplex.amplitude * 0.5 * Math.sin(Math.PI * qrsPosition);
+      // End - slow descent back to baseline
+      value += qrsComplex.amplitude * 0.7 * (1.0 - ((qrsPosition - 0.7) / 0.3));
     }
   }
   
-  // T wave often merged with QRS in VTach
-  const tPosition = qrsStart + qrsComplex.duration;
-  if (position >= tPosition && position < tPosition + tWave.duration) {
-    const tWavePosition = (position - tPosition) / tWave.duration;
-    value += tWave.amplitude * Math.sin(Math.PI * tWavePosition);
+  // ST segment - typically shows abnormal pattern in VTach
+  if (position >= qrsEnd && position < tStart) {
+    value -= 0.1; // ST depression common in VTach
+  }
+  
+  // T wave often merged with QRS or inverted in VTach
+  if (position >= tStart && position < tStart + tDuration) {
+    const tWavePosition = (position - tStart) / tDuration;
+    // Inverted T wave in VTach
+    value -= tWave.amplitude * 0.7 * Math.sin(Math.PI * tWavePosition);
   }
   
   return value;
